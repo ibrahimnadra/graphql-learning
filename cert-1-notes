@@ -1,0 +1,108 @@
+One of the benefits of schema-first design is that it reduces total development time by allowing frontend and backend teams to work in parallel. The frontend team can start working with mocked data as soon as the schema is defined, while the backend team develops the API based on that same schema. 
+
+Graph is the representation of app's data and is a collection of nodes and edges.
+
+A schema is collection of types and feilds.
+A schema is like a contract between the server and the client. It defines what a GraphQL API can and can't do, and how clients can request or change data. It's an abstraction layer that provides flexibility to consumers while hiding backend implementation details.
+a schema is a collection of object types that contain fields. Each field has a type of its own. A field's type can be scalar (such as an Int or a String), or it can be another object type
+ 
+the SDL lets you add descriptions to both types and fields by writing strings (in quotation marks) directly above them. Triple "double quotes" allow you to add line breaks for clearer formatting of lengthier comments.
+
+Query type is the entry point into our schema
+
+create a GraphQL server that can:
+Receive an incoming GraphQL query from our client
+Validate that query against our newly created schema
+Populate the queried schema fields with mocked data
+Return the populated fields as a response
+
+GraphOS Studio Explorer is another name for apollo explorer
+ Apollo Client to send queries to our GraphQL server!
+
+The ApolloProvider component uses React's Context API to make a configured Apollo Client instance available throughout a React component tree. To use it, we wrap our app's top-level components in the ApolloProvider component and pass it our client instance as a prop:
+
+How do we make Apollo Client available to our app's React components?
+We wrap our React app component tree in the Apollo Provider component
+
+Which of the following are best practices when creating client queries?
+Include only the fields that client require
+Assign each query string to a constant with ALL_CAPS names
+Test the queries in GraphOS Studio Explorer and copy them over
+wrap each query in the 'gql' template literal
+
+Our web app needs to fetch remote data to populate its homepage. To get that data, it sends a query to our GraphQL server. The app shapes the query as a string that defines the selection set of fields it needs. Then, it sends that query to the server in an HTTP POST or GET request.
+When our server receives the HTTP request, it first extracts the string with the GraphQL query. It parses and transforms it into something it can better manipulate: a tree-structured document called an AST (Abstract Syntax Tree). With this AST, the server validates the query against the types and fields in our schema. For each field in the query, the server invokes that field's resolver function. A resolver function's mission is to "resolve" its field by populating it with the correct data from the correct source, such as a database or a REST API. As all of the query's fields are resolved, the data is assembled into a nicely ordered JSON object with the exact same shape as the query. The server assigns the object to the HTTP response body's data key, and it's time for the return trip, back to our app.
+
+The beauty of GraphQL is that you can mix any number of data sources to create an API that serves the needs of your client app.
+
+N + 1 problem: Making N calls to the exact same endpoint to retrieve the same data.
+
+we need something specifically designed for GraphQL, that will efficiently handle resource caching and deduplication for our REST API calls. And because it's a very common task to fetch data from REST when building a GraphQL API, Apollo provides a dedicated DataSource class for just that: the RESTDataSource.
+
+How might a resource cache be useful for our data source?
+It helps manage the mix of different endpoints with different cache policies.
+It helps resolve query field that have already been fetched much faster.
+It prevents unnecessary Rest api calls for the data that does not get updated frequently.
+
+Resolver functions have a specific signature with four optional parameters: parent, args, contextValue, and info. these are the arguments (a.k.a. “params”) automatically passed into every resolver function by the GraphQL server.
+parent is the returned value of the resolver for this field's parent. 
+args is an object that contains all GraphQL arguments that were provided for the field by the GraphQL operation. When querying for a specific item (such as a specific track instead of all tracks), in client-land we'll make a query with an id argument that will be accessible via this args parameter in server-land.
+contextValue is an object shared across all resolvers that are executing for a particular operation. The resolver needs this argument to share state, like authentication information, a database connection, or in our case the RESTDataSource.
+info contains information about the operation's execution state, including the field name, the path to the field from the root, and more. It's not used as frequently as the others, but it can be useful for more advanced actions like setting cache policies at the resolver level.
+
+Apollo Server is where all the elements we've built previously (the schema, the resolvers, and the data sources) come together in perfect coordination.
+
+To connect our server with our TrackAPI, we'll jump down to the startStandaloneServer function. This function takes a second argument, which is an object for configuring your server's options. This is where we'll define a context function that returns an object that all our resolvers will share: contextValue (that third positional argument we talked about earlier!). We'll set a dataSources property inside the object, which is set to another object. This object will have a trackAPI key, which returns an instance of the TrackAPI data source class we imported earlier.
+
+Our resolver functions expect to find dataSources.trackAPI on their contextValue, which is why we've defined a property called dataSources here in our server. This particular name isn't a requirement; we chose dataSources as a matter of convention. You can give this property whatever name you'd like, but be sure that you update your resolver functions to access the same property.
+
+One last thing! To take advantage of the RESTDataSource's caching capabilities, we need to pass in the server's cache to our TrackAPI. Just before we return the contextValue object, let's destructure the cache property from the server. Then, we'll pass in an object to the TrackAPI class, containing that cache property.
+To learn more about the options that ApolloServer can receive, check out https://www.apollographql.com/docs/apollo-server/api/apollo-server#options
+
+We need to return the dataSource object from the server's context function, to gain access to our dataSources from each resolver's contextValue parameters.
+
+The Query type contains the entry points to our schema. In future courses, we'll take a look at two other possible entry points: Mutation and Subscription.
+Your resolvers can then use a field's provided arguments to help determine how to populate the data for that field. Arguments can help you retrieve specific objects, filter through a set of objects, or even transform the field's returned value.
+
+We have not called the author and modules endpoint in this resolver and created another resolver, for the following reasons:
+1. To keep resolver lightweight and responsible for specific pieces of data.
+2. To prevent unnecessary REST API calls when query does not ask for author's data.
+3. To keep resolvers more resilient to future changes.
+
+When we write a query, we often have nested objects and fields. So instead of putting all of that work on our poor Query.track resolver, we can create another resolver function for Track.author. This resolver is responsible for retrieving author information for a specific track. With that, we're forming a resolver chain!
+parent refers to the returned data of the preceding resolver function in the chain! That's how we get access to the authorId from the track object, in our Track.author resolver. Additionally, the Track.author resolver will only be called when the query asks for that field!
+
+A resolver function populates the data for a field in your schema. The function has four parameters. The first, parent, contains the returned data of the previous function in the resolver chain. The second, args, is an object that contains all the arguments provided to the field. We use the third parameter, contextValue, to access data sources such as a database or REST API. Finally, the fourth parameter, info, contains informational properties about the operation state.
+
+We pass the GET_TRACK query as the hook's first argument, and now the big difference from our previous query is the addition of a second argument: an options object. This object will hold a variables key, note variables, with an "S" because it can have multiple variables. This variables key takes an object as a value, and here is where we'll pass our trackId.
+
+The useQuery hook returns an object with three useful properties that we use in our app: loading indicates whether the query has completed and results have been returned. error is an object that contains any errors that the operation has thrown.data contains the results of the query after it has completed. To set variables in our query, we declare them in the second parameter of the useQuery hook, inside an options object.
+
+Queries and mutations are both types of GraphQL operations. Queries are read operations that always retrieve data. Mutations are write operations that always modify data. Similar to Query fields, fields of the Mutation type are also entry points into a GraphQL API.
+
+three common fields to all mutation responses:
+code: an Int that refers to the status of the response, similar to an HTTP status code.
+success: a Boolean flag that indicates whether all the updates the mutation was responsible for succeeded.
+message: a String to display information about the result of the mutation on the client side. 
+
+RESTDataSource class automatically handles resource caching and request deduplication for our Rest API calls.
+Resolver function names must match the feild name in the schema.
+
+unlike with useQuery, calling useMutation doesn't actually execute the mutation automatically! Instead, the useMutation hook returns an array with two elements. The first element is the mutate function we'll use to actually run the mutation later on. We'll call it incrementTrackViews. The second element is an object with information about the mutation: loading, error and data. This component doesn't need it, so we don't have to extract it.
+
+We use hooks to send requests to our GraphQL API from a React client. To send a mutation, we use the useMutation hook. This returns an array, where the first element is the mutate function used to trigger the mutation. The second element is an object with more information about the mutation, such as loading, error and data. This hook takes in a GraphQL operation as the first parameter. It also takes in an options object as the second parameter, where properties like variables are set.
+
+difference bw useQuery and useMutation:
+1. useQuery hook runs automatically on component render, whereas the useMutation hook returns a mutate function needed to trigger the mutation.
+2. useQuery returns an object and useMutation returns an array
+3. useQuery is to send Query and useMutation is used to send mutation 
+
+The page loaded instantly with all the track data, then after a brief moment, the number of views changed from 2 to 3! And we see the console log we set up earlier pop up here. That means our mutation was completed after the page was loaded. So how were we seeing everything on the page with no errors before? And how did it update on this page even though we ran the mutation on the previous page?
+we're getting our page loaded from cache while our mutation is sent off to our API. Once it returns successfully, we get back our updated value for numberOfViews. Apollo Client is doing the work behind the scenes to look at the id of this track, search for it in the cache, and update its numberOfViews field. When the cache updates, so does the UI.
+
+1. if the mutation (update of views) was still running, how did the page still load all the track data instantly without breaking or showing any error?
+2. how did the number of views change on this page automatically, even though the action (mutation) that changed it was done somewhere else — not here.
+✅ The page showed everything without errors because the query and mutation are independent. The query fetched the data right away, while the mutation (to update views) ran separately afterward.
+✅ The update appeared on this page because the pages are just components in the same app. The mutation happened in the same component context, so Apollo’s cache automatically reflected the updated data.
+
+To run an Apollo Server on a specific port when using startStandaloneServer, you need to configure the listen option within the startStandaloneServer function. By adding a listen property to the standalone server's option's object, which specifies an object with a port property
